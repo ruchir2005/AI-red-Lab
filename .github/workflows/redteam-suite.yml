@@ -1,0 +1,39 @@
+name: Built-in Red-Team Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LLM_BACKEND: mock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Unit and integration tests
+        run: python -m pytest -q
+      - name: Run suite with the original guardrails (report only)
+        run: python -m app.cli run --out reports/ci
+      - name: Run suite with recommended hardening (gate: risk score must be 10 or lower)
+        run: python -m app.cli run --harden --fail-above 10 --out reports/ci
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build the dashboard
+        run: cd frontend && npm install && npm run build
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: redteam-reports
+          path: reports/ci/
